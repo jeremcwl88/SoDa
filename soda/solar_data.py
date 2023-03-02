@@ -7,8 +7,6 @@ from scipy import linalg
 from math import sqrt,exp,log,cos,pi
 from scipy.linalg import matmul_toeplitz
 
-
-
 class SolarSite(object):
     """ Pull NSRDB site by sending a request.
     Parameters
@@ -40,16 +38,16 @@ class SolarSite(object):
 
         """
         
-        api_key = 'KgmyZTqyzgQOOjuWoMxPgMEVVMAG0kMV521gJPVv' # NSRDB api key
+        api_key = 'hefMGf6hD5iCweB62z0vMuc13QvN1C4509ezLMNa' # NSRDB api key
         attributes = 'ghi,clearsky_ghi,dhi,clearsky_dhi,dni,clearsky_dni,wind_speed,air_temperature,cloud_type,fill_flag,wind_direction'
         your_name = 'pySODA' # Your full name, use '+' instead of spaces.
         reason_for_use = 'Distributed+PV+Generation' # Your reason for using the NSRDB.
-        your_affiliation = 'LBNL-ASU' # Your affiliation
-        your_email = 'ilosadac@asu.edu' # Your email address
+        your_affiliation = 'JEREMCWL' # Your affiliation
+        your_email = 'jeremcwl88@gmail.com' # Your email address
         mailing_list = 'false'
         
         # Declare url string
-        url = 'https://developer.nrel.gov/api/solar/nsrdb_psm3_download.csv?wkt=POINT({lon}%20{lat})&names={year}&leap_day={leap}&interval={interval}&utc={utc}&full_name={name}&email={email}&affiliation={affiliation}&mailing_list={mailing_list}&reason={reason}&api_key={api}&attributes={attr}'\
+        url = 'https://developer.nrel.gov/api/nsrdb/v2/solar/psm3-download.csv?api_key={api}&wkt=POINT({lon}%20{lat})&names={year}&leap_day={leap}&interval={interval}&utc={utc}&full_name={name}&email={email}&affiliation={affiliation}&mailing_list={mailing_list}&reason={reason}&attributes={attr}'\
         .format(year=year, lat=self.lat, lon=self.lon, leap=str(leap_year).lower(), interval=interval,\
                 utc=str(utc).lower(), name=your_name, email=your_email, mailing_list=mailing_list, \
                 affiliation=your_affiliation, reason=reason_for_use, api=api_key, attr=attributes)
@@ -70,6 +68,52 @@ class SolarSite(object):
         
         return df
     
+    def get_himawari_data(self,year,leap_year,interval,utc):
+        """ Pull Himawari Satellite site by sending a request. (For Asia, Australia and Pacific coordinates)
+        Parameters
+        ----------
+        year : int
+            Choose year of data. May take any value in the interval [1998,2019]
+        leap_year : bool
+            Set leap year to true or false. True will return leap day data if present, false will not.
+        interval: string
+            Set time interval in minutes, i.e., '30' is half hour intervals. Valid intervals are 30 & 60.
+        utc : bool
+            Specify Coordinated Universal Time (UTC), 'true' will use UTC, 'false' will use the local time zone of the data.
+            NOTE: In order to use the NSRDB data in SAM, you must specify UTC as 'false'. SAM requires the data to be in the
+            local time zone.
+
+        """
+        api_key = 'hefMGf6hD5iCweB62z0vMuc13QvN1C4509ezLMNa' # NSRDB api key
+        attributes = 'ghi,clearsky_ghi,dhi,clearsky_dhi,dni,clearsky_dni,wind_speed,air_temperature,cloud_type,fill_flag,wind_direction'
+        your_name = 'pySODA' # Your full name, use '+' instead of spaces.
+        reason_for_use = 'Distributed+PV+Generation' # Your reason for using the NSRDB.
+        your_affiliation = 'JEREMCWL' # Your affiliation
+        your_email = 'jeremcwl88@gmail.com' # Your email address
+        mailing_list = 'false'
+        
+        # Declare url string
+        url = 'https://developer.nrel.gov/api/nsrdb/v2/solar/himawari-download.csv?api_key={api}&wkt=POINT({lon}%20{lat})&names={year}&leap_day={leap}&interval={interval}&utc={utc}&full_name={name}&email={email}&affiliation={affiliation}&mailing_list={mailing_list}&reason={reason}&attributes={attr}'\
+        .format(year=year, lat=self.lat, lon=self.lon, leap=str(leap_year).lower(), interval=interval,\
+                utc=str(utc).lower(), name=your_name, email=your_email, mailing_list=mailing_list, \
+                affiliation=your_affiliation, reason=reason_for_use, api=api_key, attr=attributes)
+        
+        # Return just the first 2 lines to get metadata:
+        r=requests.get(url)
+        if r.status_code==400:
+            raise NameError(r.json()["errors"][0])
+        meta = pd.read_csv(io.StringIO(r.content.decode('utf-8')),nrows=1).T
+        df = pd.read_csv(io.StringIO(r.content.decode('utf-8')),skiprows=2)
+        idx = pd.date_range(start='1/1/{yr}'.format(yr=year), freq=interval+'Min', end='12/31/{yr} 23:59:00'.format(yr=year))
+        if leap_year==False:
+            idx = idx[(idx.day != 29) | (idx.month != 2)]
+        df=df.set_index(idx)
+
+        self.resource_data = df
+        self.meta_resource_data = meta.T.to_dict('r')[0]
+        
+        return df
+
     def generate_solar_power_from_nsrdb(self,clearsky,capacity,DC_AC_ratio,tilt,azimuth,inv_eff,losses,array_type,year = None,leap_year = None,interval = None,utc = None):
         """ Generate PV power time series.
         Parameters
@@ -181,7 +225,7 @@ class SolarSite(object):
             Date in YYYY-MM-DD format. For example "2015-07-14"
             
         """
-        date_index2 = pd.date_range(start='2015-01-10', end = '2015-01-10' + ' 23:59:59', freq='1S')
+        date_index2 = pd.date_range(start= date, end = date + ' 23:59:59', freq='1S')
         ts = self.solar_power_from_nsrdb[date].resample("1S").interpolate(method="linear")
         ts = ts.reindex(date_index2).fillna(0)
 
