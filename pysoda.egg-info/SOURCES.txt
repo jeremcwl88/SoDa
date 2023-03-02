@@ -1,3 +1,4 @@
+LICENSE
 README.md
 setup.py
 pysoda.egg-info/PKG-INFO
